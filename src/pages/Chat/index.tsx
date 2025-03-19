@@ -318,16 +318,13 @@ const ChatRoom: React.FC = () => {
 
   // 监听滚动事件
   const handleScroll = ({ scrollOffset }: { scrollOffset: number }) => {
-    console.log('listRef', listRef);
     const container = listRef.current;
     if (!container || loading || !hasMore) return;
 
     // 检查是否在底部
     checkIfNearBottom();
-    console.log('滚动', scrollOffset);
     // 当滚动到顶部时加载更多
     if (scrollOffset === 0) {
-      console.log('滚动到顶部');
       // 更新当前页码，加载下一页
       const nextPage = current + 1;
       if (hasMore) {
@@ -831,10 +828,6 @@ const ChatRoom: React.FC = () => {
         tagClass = styles.levelTagNewbie;
     }
 
-    tagText = '摸鱼皇帝';
-    tagEmoji = '👑';
-    tagClass = styles.levelTagMaster;
-
     return (
       <span className={`${styles.adminTag} ${tagClass}`}>
         {tagEmoji}
@@ -1033,12 +1026,6 @@ const ChatRoom: React.FC = () => {
 
   const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
     const msg = messages[index];
-    console.log(
-      'currentUser?.id && String(msg.sender.id) === String(currentUser.id)',
-      currentUser?.id,
-      msg.sender.id,
-      String(msg.sender.id) === String(currentUser.id),
-    );
     return (
       <div
         key={msg.id}
