@@ -100,6 +100,8 @@ const ChatRoom: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userIpInfo, setUserIpInfo] = useState<{ region: string; country: string } | null>(null);
 
+  const listRef = useRef<VariableSizeList>(null);
+
   const inputRef = useRef<any>(null); // 添加输入框的ref
 
   // 修改 getIpInfo 函数
