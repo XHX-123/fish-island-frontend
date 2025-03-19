@@ -1,8 +1,8 @@
 import {
   updateMyUserUsingPost,
-  userLoginUsingPost,
   userLogoutUsingPost,
-  userRegisterUsingPost
+  signInUsingPost,
+  getLoginUserUsingGet
 } from '@/services/backend/userController';
 import {getCosCredentialUsingGet} from '@/services/backend/fileController';
 import {
@@ -11,7 +11,8 @@ import {
   SettingOutlined,
   UserOutlined,
   EditOutlined,
-  UploadOutlined
+  UploadOutlined,
+
 } from '@ant-design/icons';
 import {history, useModel} from '@umijs/max';
 import {
@@ -23,30 +24,22 @@ import {
   message,
   Modal,
   Space,
-  Tabs,
   TimePicker,
   Tooltip,
   Select,
-  Upload
+  Upload,
+  Switch
 } from 'antd';
 import type {MenuInfo} from 'rc-menu/lib/interface';
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useState} from 'react';
 import {flushSync} from 'react-dom';
 import HeaderDropdown from '../HeaderDropdown';
 import {useEmotionCss} from "@ant-design/use-emotion-css";
-import {Helmet} from "@@/exports";
-import Settings from "../../../config/defaultSettings";
-import {LoginForm, ProFormText} from "@ant-design/pro-components";
-import Footer from "@/components/Footer";
 import moment, {Moment} from "moment";
 import './app.css';
-import styles from "@/pages/User/Register/index.less";
-import {Captcha} from "aj-captcha-react";
-import {BACKEND_HOST_CODE} from "@/constants";
 import {RcFile} from "antd/lib/upload";
 import COS from 'cos-js-sdk-v5';
-import {signInUsingPost} from "@/services/backend/userController";
-import {getLoginUserUsingGet} from "@/services/backend/userController";
+import LoginRegister from '../LoginRegister';
 
 export type GlobalHeaderRightProps = {
   menu?: boolean;
@@ -56,11 +49,6 @@ type MoYuTimeType = {
   endTime?: Moment;
   lunchTime?: Moment;
   monthlySalary?: number;
-};
-
-type Holiday = {
-  name: string;
-  date: Moment;
 };
 
 export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
@@ -91,23 +79,8 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
     earnedAmount?: number;
   }>({type: 'work', timeRemaining: '00:00:00'});
 
-  const holidays: Holiday[] = [
-    {name: '端午节', date: moment('2024-06-10')},
-    {name: '中秋节', date: moment('2024-09-17')},
-    {name: '国庆节', date: moment('2024-10-01')},
-  ];
 
-  const [type, setType] = useState<string>('account');
-  const containerClassName = useEmotionCss(() => {
-    return {
-      display: 'flex',
-      flexDirection: 'column',
-      overflow: 'auto',
-      backgroundImage:
-        "url('https://mdn.alipayobjects.com/yuyan_qk0oxh/afts/img/V-_oS6r-i7wAAAAAAAAAAAAAFl94AQBr')",
-      backgroundSize: '100% 100%',
-    };
-  });
+
   const onFinishMoYu: FormProps<MoYuTimeType>['onFinish'] = (values) => {
     // 将 Moment 对象转换为 ISO 字符串格式后存储
     const dataToSave = {
@@ -129,31 +102,6 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
   const onFinishFailedMoYu: FormProps<MoYuTimeType>['onFinishFailed'] = (errorInfo) => {
     console.log('Failed:', errorInfo);
   };
-  const handleSubmit = async (values: API.UserLoginRequest) => {
-    try {
-      // 登录
-      const res = await userLoginUsingPost({
-        ...values,
-      });
-      if (res.code === 0) {
-        const defaultLoginSuccessMessage = '登录成功！';
-        const result = res.data as any
-        localStorage.setItem('tokenName', result.saTokenInfo?.tokenName as string);
-        localStorage.setItem('tokenValue', result.saTokenInfo?.tokenValue as string);
-        message.success(defaultLoginSuccessMessage);
-        // 保存已登录用户信息
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
-        setInitialState({
-          // eslint-disable-next-line @typescript-eslint/no-use-before-define
-          ...initialState,
-          currentUser: res.data,
-        });
-      }
-    } catch (error: any) {
-      const defaultLoginFailureMessage = `登录失败，${error.message}`;
-      message.error(defaultLoginFailureMessage);
-    }
-  };
   /**
    * 退出登录，并且将当前的 url 保存
    */
@@ -162,39 +110,10 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
   };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMoneyOpen, setIsMoneyOpen] = useState(false);
-  const [valueData, setValueData] = useState<API.UserRegisterRequest>();
-  const ref = useRef();
 
   const {initialState, setInitialState} = useModel('@@initialState');
   const {currentUser}: any = initialState || {};
 
-  const click = () => {
-    const current = ref.current as any;
-    current.verify();
-    console.log(current.verify());
-  };
-  const handleRegisterSubmit = async (values: API.UserRegisterRequest) => {
-    const {userPassword, checkPassword} = values;
-    // 校验
-    if (userPassword !== checkPassword) {
-      message.error('两次输入的密码不一致');
-      return;
-    }
-
-    try {
-      // 注册
-      const data = await userRegisterUsingPost(values);
-      if (data.code === 0) {
-        const defaultLoginSuccessMessage = '注册成功！';
-        message.success(defaultLoginSuccessMessage);
-
-        setType('account');
-      }
-    } catch (error: any) {
-      const defaultLoginFailureMessage = '注册失败，请重试！';
-      message.error(defaultLoginFailureMessage);
-    }
-  };
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [editProfileForm] = Form.useForm();
   const [siteConfigForm] = Form.useForm();
@@ -245,92 +164,55 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
     };
   });
 
-  const menuItems = [
-    ...(menu
-      ? [
-        {
-          key: 'center',
-          icon: <UserOutlined/>,
-          label: '个人中心',
-        },
-        {
-          key: 'settings',
-          icon: <SettingOutlined/>,
-          label: '个人设置',
-        },
-        {
-          type: 'divider' as const,
-        },
-      ]
-      : []),
-    {
-      key: 'edit',
-      icon: <EditOutlined/>,
-      label: '修改信息',
-    },
-    {
-      key: 'bossKey',
-      icon: <LockOutlined/>,
-      label: '老板键设置',
-    },
-    {
-      key: 'siteConfig',
-      icon: <SettingOutlined/>,
-      label: '网站设置',
-    },
-    {
-      key: 'logout',
-      icon: <LogoutOutlined/>,
-      label: '退出登录',
-    },
-  ];
+  const [isMoneyVisible, setIsMoneyVisible] = useState(() => {
+    const savedVisibility = localStorage.getItem('moneyButtonVisibility');
+    return savedVisibility === null ? true : savedVisibility === 'true';
+  });
 
-  // @ts-ignore
-  // @ts-ignore
-  const onMenuClick = useCallback(
-    (event: MenuInfo) => {
-      const {key} = event;
-      if (key === 'logout') {
-        flushSync(() => {
-          setInitialState((s) => ({...s, currentUser: undefined}));
-        });
-        loginOut();
-        return;
-      }
-      if (key === 'edit') {
-        setIsEditProfileOpen(true);
-        // 设置初始头像预览
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
-        if (currentUser?.userAvatar && !defaultAvatars.includes(currentUser.userAvatar)) {
-          // eslint-disable-next-line @typescript-eslint/no-use-before-define
-          setPreviewAvatar(currentUser.userAvatar);
-        }
-        return;
-      }
-      if (key === 'bossKey') {
-        setIsBossKeyOpen(true);
-        return;
-      }
-      if (key === 'siteConfig') {
-        setIsSiteConfigOpen(true);
-        return;
-      }
-      history.push(`/account/${key}`);
-    },
-    [setInitialState, currentUser?.userAvatar],
-  );
+  const [holidayInfo, setHolidayInfo] = useState<{
+    date: string;
+    days: number;
+    holiday: boolean;
+    name: string;
+  } | null>(null);
 
+  // 假期倒计时样式
+  const holidayTooltipStyle = useEmotionCss(() => ({
+    '.ant-tooltip-inner': {
+      background: 'linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%)',
+      padding: '12px 16px',
+      borderRadius: '8px',
+      boxShadow: '0 4px 12px rgba(255, 154, 158, 0.2)',
+      minWidth: '200px'
+    },
+    '.ant-tooltip-arrow': {
+      display: 'none'
+    }
+  }));
+
+  // 获取假期信息
+  const fetchHolidayInfo = async () => {
+    try {
+      const response = await fetch('https://fish.codebug.icu/holiday/next');
+      const data = await response.json();
+      if (data.code === 200) {
+        setHolidayInfo(data.data);
+      }
+    } catch (error) {
+      console.error('获取假期信息失败:', error);
+    }
+  };
+
+  // 在组件加载时获取假期信息
+  useEffect(() => {
+    fetchHolidayInfo();
+  }, []);
 
   // 计算倒计时和已赚取金额
   useEffect(() => {
     if (moYuData?.endTime && moYuData?.startTime) {
       const interval = setInterval(() => {
         const now = moment();
-
-        // 查找最近的节假日
-        const upcomingHoliday = holidays
-          .filter(h => h.date.isAfter(now))
-          .sort((a, b) => a.date.diff(now) - b.date.diff(now))[0];
 
         // 检查是否接近午餐时间（前后120分钟内）
         const lunchTime = moment(moYuData.lunchTime);
@@ -370,15 +252,6 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
               earnedAmount: moYuData.monthlySalary ? earnedAmount : undefined
             });
           }
-        } else if (upcomingHoliday) {
-          // 节假日倒计时
-          const duration = moment.duration(upcomingHoliday.date.diff(now));
-          setTimeInfo({
-            type: 'holiday',
-            name: upcomingHoliday.name,
-            timeRemaining: `${duration.days()}天${duration.hours()}时${duration.minutes()}分`,
-            earnedAmount: moYuData.monthlySalary ? earnedAmount : undefined
-          });
         } else {
           // 下班倒计时
           const duration = moment.duration(endTime.diff(now));
@@ -405,7 +278,7 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
 
       return () => clearInterval(interval);
     }
-  }, [moYuData, holidays]);
+  }, [moYuData]);
 
   const [hasCheckedIn, setHasCheckedIn] = useState(false);
   const [isCheckinAnimating, setIsCheckinAnimating] = useState(false);
@@ -603,172 +476,102 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
     },
   }));
 
+  const menuItems = [
+    ...(menu
+      ? [
+        {
+          key: 'center',
+          icon: <UserOutlined/>,
+          label: '个人中心',
+        },
+        {
+          key: 'settings',
+          icon: <SettingOutlined/>,
+          label: '个人设置',
+        },
+        {
+          type: 'divider' as const,
+        },
+      ]
+      : []),
+    {
+      key: 'edit',
+      icon: <EditOutlined/>,
+      label: '修改信息',
+    },
+    {
+      key: 'bossKey',
+      icon: <LockOutlined/>,
+      label: '老板键设置',
+    },
+    {
+      key: 'siteConfig',
+      icon: <SettingOutlined/>,
+      label: '网站设置',
+    },
+    {
+      key: 'toggleMoney',
+      icon: <SettingOutlined/>,
+      label: isMoneyVisible ? '隐藏工作时间' : '显示工作时间',
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined/>,
+      label: '退出登录',
+    },
+  ];
+
+  // @ts-ignore
+  const onMenuClick = useCallback(
+    (event: MenuInfo) => {
+      const {key} = event;
+      if (key === 'logout') {
+        flushSync(() => {
+          setInitialState((s) => ({...s, currentUser: undefined}));
+        });
+        loginOut();
+        return;
+      }
+      if (key === 'edit') {
+        setIsEditProfileOpen(true);
+        // 设置初始头像预览
+        if (currentUser?.userAvatar && !defaultAvatars.includes(currentUser.userAvatar)) {
+          setPreviewAvatar(currentUser.userAvatar);
+        }
+        return;
+      }
+      if (key === 'bossKey') {
+        setIsBossKeyOpen(true);
+        return;
+      }
+      if (key === 'siteConfig') {
+        setIsSiteConfigOpen(true);
+        return;
+      }
+      if (key === 'toggleMoney') {
+        const newValue = !isMoneyVisible;
+        setIsMoneyVisible(newValue);
+        localStorage.setItem('moneyButtonVisibility', newValue.toString());
+        return;
+      }
+      history.push(`/account/${key}`);
+    },
+    [setInitialState, currentUser?.userAvatar, isMoneyVisible],
+  );
+
   if (!currentUser) {
     return (
       <>
-        <Modal footer={null} open={isModalOpen} onCancel={() => {
-          setIsModalOpen(false);
-        }}>
-          <div className={containerClassName}>
-            <Helmet>
-              <title>
-                {'登录'}- {Settings.title}
-              </title>
-            </Helmet>
-            <div
-              style={{
-                flex: '1',
-                padding: '32px 0',
-              }}
-            >
-              <LoginForm
-                contentStyle={{
-                  minWidth: 280,
-                  maxWidth: '75vw',
-                }}
-                logo={<img alt="logo" style={{height: '100%'}}
-                           src="https://pic.rmb.bdstatic.com/bjh/news/c0afb3b38710698974ac970434e8eb71.png"/>}
-                title="摸鱼岛🎣"
-                subTitle={'加入摸鱼岛一起来摸吧'}
-                initialValues={{
-                  autoLogin: true,
-                }}
-                onFinish={async (values) => {
-                  if (type === 'account') {
-                    await handleSubmit(values as API.UserLoginRequest);
-                  } else if (type === 'register') {
-                    click();
-                    setValueData(values);
-                  }
-                }}
-              >
-                <Tabs
-                  activeKey={type}
-                  onChange={setType}
-                  centered
-                  items={[
-                    {
-                      key: 'account',
-                      label: '登录',
-                    },
-                    {
-                      key: 'register',
-                      label: '注册',
-                    }
-                  ]}
-                />
-                {type === 'account' && (
-                  <>
-                    <ProFormText
-                      name="userAccount"
-                      fieldProps={{
-                        size: 'large',
-                        prefix: <UserOutlined/>,
-                      }}
-                      placeholder={'请输入账号'}
-                      rules={[
-                        {
-                          required: true,
-                          message: '账号是必填项！',
-                        },
-                      ]}
-                    />
-                    <ProFormText.Password
-                      name="userPassword"
-                      fieldProps={{
-                        size: 'large',
-                        prefix: <LockOutlined/>,
-                      }}
-                      placeholder={'请输入密码'}
-                      rules={[
-                        {
-                          required: true,
-                          message: '密码是必填项！',
-                        },
-                      ]}
-                    />
-                  </>
-                )}
-                {type === 'register' && (
-                  <>
-                    <ProFormText
-                      name="userAccount"
-                      fieldProps={{
-                        size: 'large',
-                        prefix: <UserOutlined className={styles.prefixIcon}/>,
-                      }}
-                      placeholder="请输入账号"
-                      rules={[
-                        {
-                          required: true,
-                          message: '账号是必填项！',
-                        },
-                      ]}
-                    />
-                    <ProFormText.Password
-                      name="userPassword"
-                      fieldProps={{
-                        size: 'large',
-                        prefix: <LockOutlined className={styles.prefixIcon}/>,
-                      }}
-                      placeholder="请输入密码"
-                      rules={[
-                        {
-                          required: true,
-                          message: '密码是必填项！',
-                        },
-                        {
-                          min: 8,
-                          type: 'string',
-                          message: '长度不能小于 8',
-                        },
-                      ]}
-                    />
-                    <ProFormText.Password
-                      name="checkPassword"
-                      fieldProps={{
-                        size: 'large',
-                        prefix: <LockOutlined className={styles.prefixIcon}/>,
-                      }}
-                      placeholder="请再次输入密码"
-                      rules={[
-                        {
-                          required: true,
-                          message: '确认密码是必填项！',
-                        },
-                        {
-                          min: 8,
-                          type: 'string',
-                          message: '长度不能小于 8',
-                        },
-                      ]}
-                    />
-                    <Captcha
-                      onSuccess={async (data) => {
-                        const value = valueData as any;
-                        if (value) {
-                          value.captchaVerification = data.captchaVerification;
-                          await handleRegisterSubmit(value);
-                        }
-                      }}
-                      path={BACKEND_HOST_CODE}
-                      type="auto"
-                      ref={ref}
-                    ></Captcha>
-                  </>
-                )}
-              </LoginForm>
-            </div>
-            <Footer/>
-          </div>
-        </Modal>
+        <LoginRegister
+          isModalOpen={isModalOpen}
+          onCancel={() => setIsModalOpen(false)}
+        />
 
         <Button type="primary" shape="round" onClick={() => {
           setIsModalOpen(true);
         }}>
           登录
         </Button>
-
 
         <div className="App">
           {/* 其他内容 */}
@@ -804,6 +607,18 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
                   <Input placeholder="选填，不填则不显示收入" type="number"/>
                 </Form.Item>
 
+                <Form.Item label="显示状态">
+                  <Switch
+                    checked={isMoneyVisible}
+                    onChange={(checked) => {
+                      setIsMoneyVisible(checked);
+                      localStorage.setItem('moneyButtonVisibility', checked.toString());
+                    }}
+                    checkedChildren="显示"
+                    unCheckedChildren="隐藏"
+                  />
+                </Form.Item>
+
                 <Form.Item>
                   <Button type="primary" htmlType="submit" onClick={() => {
                     setIsMoneyOpen(false)
@@ -814,36 +629,73 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
               </Form>
             </div>
           </Modal>
-          <Button
-            type="primary"
-            shape="circle"
-            onClick={() => {
-              setIsMoneyOpen(true);
-            }}
-            className="money-button"
-          >
-            <div className="money-button-content">
-              <div>
-                {timeInfo.type === 'lunch' ? '🍱' : timeInfo.type === 'holiday' ? '🎉' : '🧑‍💻'}
-              </div>
-              <div>
-                {timeInfo.type === 'holiday' ?
-                  `${timeInfo.name}: ${timeInfo.timeRemaining}` :
-                  timeInfo.type === 'lunch' ?
-                    `午餐: ${timeInfo.timeRemaining}` :
-                    `下班: ${timeInfo.timeRemaining}`
-                }
-              </div>
-              {timeInfo.earnedAmount !== undefined && (
-                <div>💰：{timeInfo.earnedAmount.toFixed(2)}</div>
-              )}
-            </div>
-          </Button>
+          {isMoneyVisible && (
+            <Tooltip
+              title={
+                holidayInfo ? (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: 'bold',
+                      color: '#fff',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                    }}>
+                      {holidayInfo.name}
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      color: '#fff',
+                      opacity: 0.9
+                    }}>
+                      {moment(holidayInfo.date).format('YYYY年MM月DD日')}
+                    </div>
+                    <div style={{
+                      fontSize: '18px',
+                      fontWeight: 'bold',
+                      color: '#fff',
+                      textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                    }}>
+                      还有 {moment(holidayInfo.date).diff(moment(), 'days')} 天 🎉
+                    </div>
+                  </div>
+                ) : '加载中...'
+              }
+              placement="top"
+              overlayClassName={holidayTooltipStyle}
+            >
+              <Button
+                type="primary"
+                shape="circle"
+                onClick={() => {
+                  setIsMoneyOpen(true);
+                }}
+                className="money-button"
+              >
+                <div className="money-button-content">
+                  <div>
+                    {timeInfo.type === 'lunch' ? '🍱' : '🧑‍💻'}
+                  </div>
+                  <div>
+                    {timeInfo.type === 'lunch' ?
+                      `午餐: ${timeInfo.timeRemaining}` :
+                      `下班: ${timeInfo.timeRemaining}`
+                  }
+                  </div>
+                  {timeInfo.earnedAmount !== undefined && (
+                    <div>💰：{timeInfo.earnedAmount.toFixed(2)}</div>
+                  )}
+                </div>
+              </Button>
+            </Tooltip>
+          )}
         </div>
       </>
-
-    )
-      ;
+    );
   }
 
   return (
@@ -1048,6 +900,18 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
                 <Input placeholder="选填，不填则不显示收入" type="number"/>
               </Form.Item>
 
+              <Form.Item label="显示状态">
+                <Switch
+                  checked={isMoneyVisible}
+                  onChange={(checked) => {
+                    setIsMoneyVisible(checked);
+                    localStorage.setItem('moneyButtonVisibility', checked.toString());
+                  }}
+                  checkedChildren="显示"
+                  unCheckedChildren="隐藏"
+                />
+              </Form.Item>
+
               <Form.Item>
                 <Button type="primary" htmlType="submit" onClick={() => {
                   setIsMoneyOpen(false)
@@ -1058,31 +922,70 @@ export const AvatarDropdown: React.FC<GlobalHeaderRightProps> = ({menu}) => {
             </Form>
           </div>
         </Modal>
-        <Button
-          type="primary"
-          shape="circle"
-          onClick={() => {
-            setIsMoneyOpen(true);
-          }}
-          className="money-button"
-        >
-          <div className="money-button-content">
-            <div>
-              {timeInfo.type === 'lunch' ? '🍱' : timeInfo.type === 'holiday' ? '🎉' : '🧑‍💻'}
-            </div>
-            <div>
-              {timeInfo.type === 'holiday' ?
-                `${timeInfo.name}: ${timeInfo.timeRemaining}` :
-                timeInfo.type === 'lunch' ?
-                  `午餐: ${timeInfo.timeRemaining}` :
-                  `下班: ${timeInfo.timeRemaining}`
-              }
-            </div>
-            {timeInfo.earnedAmount !== undefined && (
-              <div>💰：{timeInfo.earnedAmount.toFixed(2)}</div>
-            )}
-          </div>
-        </Button>
+        {isMoneyVisible && (
+          <Tooltip
+            title={
+              holidayInfo ? (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  <div style={{
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    color: '#fff',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                  }}>
+                    {holidayInfo.name}
+                  </div>
+                  <div style={{
+                    fontSize: '14px',
+                    color: '#fff',
+                    opacity: 0.9
+                  }}>
+                    {moment(holidayInfo.date).format('YYYY年MM月DD日')}
+                  </div>
+                  <div style={{
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    color: '#fff',
+                    textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+                  }}>
+                    还有 {moment(holidayInfo.date).diff(moment(), 'days')} 天 🎉
+                  </div>
+                </div>
+              ) : '加载中...'
+            }
+            placement="top"
+            overlayClassName={holidayTooltipStyle}
+          >
+            <Button
+              type="primary"
+              shape="circle"
+              onClick={() => {
+                setIsMoneyOpen(true);
+              }}
+              className="money-button"
+            >
+              <div className="money-button-content">
+                <div>
+                  {timeInfo.type === 'lunch' ? '🍱' : '🧑‍💻'}
+                </div>
+                <div>
+                  {timeInfo.type === 'lunch' ?
+                    `午餐: ${timeInfo.timeRemaining}` :
+                    `下班: ${timeInfo.timeRemaining}`
+                  }
+                </div>
+                {timeInfo.earnedAmount !== undefined && (
+                  <div>💰：{timeInfo.earnedAmount.toFixed(2)}</div>
+                )}
+              </div>
+            </Button>
+          </Tooltip>
+        )}
       </div>
 
       {/* 添加老板键设置Modal */}

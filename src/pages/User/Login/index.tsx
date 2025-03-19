@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import Settings from '../../../../config/defaultSettings';
 import {Link} from "umi";
 
+// 此页面仅用于 /user/login 路径的登录功能，主注册逻辑位于 /components/RightContent/AvatarDropDown。
 const Login: React.FC = () => {
   const [type, setType] = useState<string>('account');
   const { initialState, setInitialState } = useModel('@@initialState');

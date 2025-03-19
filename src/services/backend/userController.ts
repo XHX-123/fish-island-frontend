@@ -29,6 +29,51 @@ export async function deleteUserUsingPost(
   });
 }
 
+/** 用户邮箱登录 POST /api/user/email/login */
+export async function userEmailLoginUsingPost(
+  body: API.UserLoginRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseLoginUserVO_>('/api/user/email/login', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 用户邮箱注册 POST /api/user/email/register */
+export async function userEmailRegisterUsingPost(
+  body: API.UserRegisterRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseLong_>('/api/user/email/register', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
+/** 用户邮箱验证码 POST /api/user/email/send */
+export async function userEmailSendUsingPost(
+  body: API.UserRegisterRequest,
+  options?: { [key: string]: any },
+) {
+  return request<API.BaseResponseBoolean_>('/api/user/email/send', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    ...(options || {}),
+  });
+}
+
 /** 根据 id 获取用户（仅管理员） GET /api/user/get */
 export async function getUserByIdUsingGet(
   // 叠加生成的Param类型 (非body参数swagger默认没有生成对象)

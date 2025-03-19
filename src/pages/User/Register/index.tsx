@@ -9,6 +9,7 @@ import React, {useRef, useState} from 'react';
 import {history} from 'umi';
 import styles from './index.less';
 
+// 此页面仅用于 /user/register 路径的注册功能，主注册逻辑位于 /components/RightContent/AvatarDropDown。
 const Register: React.FC = () => {
   const [type, setType] = useState<string>('account');
   const [valueData, setValueData] = useState<API.UserRegisterRequest>();

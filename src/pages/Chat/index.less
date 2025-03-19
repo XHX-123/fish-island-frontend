@@ -682,18 +682,26 @@
       gap: 8px;
       width: 100%;
 
-      .ant-input {
+      .chatTextArea {
+        flex: 1;
         background: rgba(255, 255, 255, 0.8);
         border: 1px solid rgba(0, 0, 0, 0.06);
         border-radius: 20px;
-        padding: 8px 16px;
         transition: all 0.3s ease;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+        resize: none;
+        padding: 8px 16px;
+        line-height: 1.5;
+        font-size: 14px;
 
         &:hover,
         &:focus {
           border-color: #40a9ff;
           box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+        }
+
+        &::placeholder {
+          color: #bbb;
         }
       }
 

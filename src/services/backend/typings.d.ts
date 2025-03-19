@@ -172,6 +172,7 @@ declare namespace API {
 
   type LoginUserVO = {
     createTime?: string;
+    email?: string;
     id?: number;
     lastSignInDate?: string;
     level?: number;
@@ -392,15 +393,18 @@ declare namespace API {
 
   type Sender = {
     avatar?: string;
+    country?: string;
     id?: string;
     isAdmin?: boolean;
     level?: number;
     name?: string;
     points?: number;
+    region?: string;
   };
 
   type TokenLoginUserVo = {
     createTime?: string;
+    email?: string;
     id?: number;
     lastSignInDate?: string;
     level?: number;
@@ -424,6 +428,7 @@ declare namespace API {
 
   type User = {
     createTime?: string;
+    email?: string;
     id?: number;
     isDelete?: number;
     mpOpenId?: string;
@@ -471,6 +476,7 @@ declare namespace API {
   };
 
   type UserLoginRequest = {
+    email?: string;
     userAccount?: string;
     userPassword?: string;
   };
@@ -491,6 +497,8 @@ declare namespace API {
   type UserRegisterRequest = {
     captchaVerification?: string;
     checkPassword?: string;
+    code?: string;
+    email?: string;
     userAccount?: string;
     userPassword?: string;
   };
