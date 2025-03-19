@@ -1,5 +1,5 @@
-import React, {useEffect, useRef, useState} from 'react';
-import {Alert, Avatar, Button, Input, message, Popover, Spin, Popconfirm, Modal} from 'antd';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Alert, Avatar, Button, Input, message, Popover, Spin, Popconfirm, Modal } from 'antd';
 import COS from 'cos-js-sdk-v5';
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
@@ -11,16 +11,21 @@ import {
   SmileOutlined,
   SoundOutlined,
   DeleteOutlined,
-  PaperClipOutlined
+  PaperClipOutlined,
 } from '@ant-design/icons';
 import styles from './index.less';
-import {useModel} from "@@/exports";
-import {BACKEND_HOST_WS} from "@/constants";
-import {getOnlineUserListUsingGet, listMessageVoByPageUsingPost} from "@/services/backend/chatController";
+import { useModel } from '@@/exports';
+import { BACKEND_HOST_WS } from '@/constants';
+import {
+  getOnlineUserListUsingGet,
+  listMessageVoByPageUsingPost,
+} from '@/services/backend/chatController';
 import MessageContent from '@/components/MessageContent';
 import EmoticonPicker from '@/components/EmoticonPicker';
-import {getCosCredentialUsingGet} from "@/services/backend/fileController";
-import {uploadFileByMinioUsingPost} from "@/services/backend/fileController";
+import { getCosCredentialUsingGet } from '@/services/backend/fileController';
+import { uploadFileByMinioUsingPost } from '@/services/backend/fileController';
+// 虚拟列表相关
+import { VariableSizeList } from 'react-window';
 
 interface Message {
   id: string;
@@ -52,8 +57,8 @@ const ChatRoom: React.FC = () => {
   const messageContainerRef = useRef<HTMLDivElement>(null);
   const [isUserListCollapsed, setIsUserListCollapsed] = useState(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
-  const {initialState} = useModel('@@initialState');
-  const {currentUser} = initialState || {};
+  const { initialState } = useModel('@@initialState');
+  const { currentUser } = initialState || {};
   const [messageApi, contextHolder] = message.useMessage();
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const maxReconnectAttempts = 5;
@@ -71,7 +76,9 @@ const ChatRoom: React.FC = () => {
   // 添加已加载消息ID的集合
   const [loadedMessageIds] = useState<Set<string>>(new Set());
 
-  const [announcement, setAnnouncement] = useState<string>('欢迎来到摸鱼聊天室！🎉 这里是一个充满快乐的地方~。致谢：感谢玄德大佬、yovvis大佬 赞助的对象存储服务🌟');
+  const [announcement, setAnnouncement] = useState<string>(
+    '欢迎来到摸鱼聊天室！🎉 这里是一个充满快乐的地方~。致谢：感谢玄德大佬、yovvis大佬 赞助的对象存储服务🌟',
+  );
   const [showAnnouncement, setShowAnnouncement] = useState<boolean>(true);
 
   const [isComponentMounted, setIsComponentMounted] = useState(true);
@@ -91,47 +98,49 @@ const ChatRoom: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userIpInfo, setUserIpInfo] = useState<{ region: string } | null>(null);
 
+  const listRef = useRef<VariableSizeList>(null);
+
   // 修改 getChineseLocation 函数
   const getChineseLocation = (region: string) => {
     const regionMap: { [key: string]: string } = {
-      'Guangdong': '广东省',
-      'Beijing': '北京市',
-      'Shanghai': '上海市',
-      'Tianjin': '天津市',
-      'Chongqing': '重庆市',
-      'Hebei': '河北省',
-      'Shanxi': '山西省',
+      Guangdong: '广东省',
+      Beijing: '北京市',
+      Shanghai: '上海市',
+      Tianjin: '天津市',
+      Chongqing: '重庆市',
+      Hebei: '河北省',
+      Shanxi: '山西省',
       'Inner Mongolia': '内蒙古自治区',
-      'Liaoning': '辽宁省',
-      'Jilin': '吉林省',
-      'Heilongjiang': '黑龙江省',
-      'Jiangsu': '江苏省',
-      'Zhejiang': '浙江省',
-      'Anhui': '安徽省',
-      'Fujian': '福建省',
-      'Jiangxi': '江西省',
-      'Shandong': '山东省',
-      'Henan': '河南省',
-      'Hubei': '湖北省',
-      'Hunan': '湖南省',
-      'Guangxi': '广西壮族自治区',
-      'Hainan': '海南省',
-      'Sichuan': '四川省',
-      'Guizhou': '贵州省',
-      'Yunnan': '云南省',
-      'Tibet': '西藏自治区',
-      'Shaanxi': '陕西省',
-      'Gansu': '甘肃省',
-      'Qinghai': '青海省',
-      'Ningxia': '宁夏回族自治区',
-      'Xinjiang': '新疆维吾尔自治区',
-      'Taiwan': '台湾省',
+      Liaoning: '辽宁省',
+      Jilin: '吉林省',
+      Heilongjiang: '黑龙江省',
+      Jiangsu: '江苏省',
+      Zhejiang: '浙江省',
+      Anhui: '安徽省',
+      Fujian: '福建省',
+      Jiangxi: '江西省',
+      Shandong: '山东省',
+      Henan: '河南省',
+      Hubei: '湖北省',
+      Hunan: '湖南省',
+      Guangxi: '广西壮族自治区',
+      Hainan: '海南省',
+      Sichuan: '四川省',
+      Guizhou: '贵州省',
+      Yunnan: '云南省',
+      Tibet: '西藏自治区',
+      Shaanxi: '陕西省',
+      Gansu: '甘肃省',
+      Qinghai: '青海省',
+      Ningxia: '宁夏回族自治区',
+      Xinjiang: '新疆维吾尔自治区',
+      Taiwan: '台湾省',
       'Hong Kong': '香港特别行政区',
-      'Macao': '澳门特别行政区'
+      Macao: '澳门特别行政区',
     };
 
     return {
-      region: regionMap[region] || region
+      region: regionMap[region] || region,
     };
   };
 
@@ -141,13 +150,13 @@ const ChatRoom: React.FC = () => {
       const response = await fetch('https://ip.renfei.net/?lang=zh-CN');
       const data = await response.json();
       const location = getChineseLocation(data.location.region);
-      
+
       console.log('IP信息:', {
         IP: data.clientIP,
         '国家/地区': data.location.countryCode === 'CN' ? '中国' : data.location.countryCode,
-        '省份': location.region,
-        '运营商': data.location.line,
-        '经纬度': `${data.location.latitude}, ${data.location.longitude}`
+        省份: location.region,
+        运营商: data.location.line,
+        经纬度: `${data.location.latitude}, ${data.location.longitude}`,
       });
 
       // 只保存省份信息
@@ -167,38 +176,43 @@ const ChatRoom: React.FC = () => {
     try {
       const response = await getOnlineUserListUsingGet();
       if (response.data) {
-        const onlineUsersList = response.data.map(user => ({
+        const onlineUsersList = response.data.map((user) => ({
           id: String(user.id),
           name: user.name || '未知用户',
           avatar: user.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=visitor',
           level: user.level || 1,
           isAdmin: user.isAdmin || false,
           status: '在线',
-          points: user.points || 0
+          points: user.points || 0,
         }));
 
         // 添加机器人用户
         const botUser = {
           id: '-1',
           name: '摸鱼助手',
-          avatar: 'https://s1.aigei.com/src/img/gif/3d/3dbb70bf3c81407cb5aaba07c79b317b.gif?imageMogr2/auto-orient/thumbnail/!282x270r/gravity/Center/crop/282x270/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:_J_OaEEsWRM6CkjjOHEHug85N7U=',
+          avatar:
+            'https://s1.aigei.com/src/img/gif/3d/3dbb70bf3c81407cb5aaba07c79b317b.gif?imageMogr2/auto-orient/thumbnail/!282x270r/gravity/Center/crop/282x270/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:_J_OaEEsWRM6CkjjOHEHug85N7U=',
           level: 1,
           isAdmin: false,
           status: '在线',
-          points: 9999
+          points: 9999,
         };
         onlineUsersList.unshift(botUser);
 
         // 如果当前用户已登录且不在列表中，将其添加到列表
-        if (currentUser?.id && !onlineUsersList.some(user => user.id === String(currentUser.id))) {
+        if (
+          currentUser?.id &&
+          !onlineUsersList.some((user) => user.id === String(currentUser.id))
+        ) {
           onlineUsersList.push({
             id: String(currentUser.id),
             name: currentUser.userName || '未知用户',
-            avatar: currentUser.userAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=visitor',
+            avatar:
+              currentUser.userAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=visitor',
             level: currentUser.level || 1,
             isAdmin: currentUser.userRole === 'admin',
             status: '在线',
-            points: currentUser.points || 0
+            points: currentUser.points || 0,
           });
         }
 
@@ -216,7 +230,7 @@ const ChatRoom: React.FC = () => {
   }, []);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({behavior: 'smooth'});
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
   const loadHistoryMessages = async (page: number, isFirstLoad = false) => {
     if (!hasMore || loading) return;
@@ -228,41 +242,49 @@ const ChatRoom: React.FC = () => {
         pageSize,
         roomId: -1,
         sortField: 'createTime',
-        sortOrder: 'desc'
+        sortOrder: 'desc',
       });
       if (response.data?.records) {
         const historyMessages = response.data.records
-          .map(record => ({
+          .map((record) => ({
             id: String(record.messageWrapper?.message?.id),
             content: record.messageWrapper?.message?.content || '',
             sender: {
               id: String(record.userId),
               name: record.messageWrapper?.message?.sender?.name || '未知用户',
-              avatar: record.messageWrapper?.message?.sender?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=visitor',
+              avatar:
+                record.messageWrapper?.message?.sender?.avatar ||
+                'https://api.dicebear.com/7.x/avataaars/svg?seed=visitor',
               level: record.messageWrapper?.message?.sender?.level || 1,
               points: record.messageWrapper?.message?.sender?.points || 0,
-              isAdmin: record.messageWrapper?.message?.sender?.isAdmin || false
+              isAdmin: record.messageWrapper?.message?.sender?.isAdmin || false,
             },
             timestamp: new Date(record.messageWrapper?.message?.timestamp || Date.now()),
-            quotedMessage: record.messageWrapper?.message?.quotedMessage ? {
-              id: String(record.messageWrapper.message.quotedMessage.id),
-              content: record.messageWrapper.message.quotedMessage.content || '',
-              sender: {
-                id: String(record.messageWrapper.message.quotedMessage.sender?.id),
-                name: record.messageWrapper.message.quotedMessage.sender?.name || '未知用户',
-                avatar: record.messageWrapper.message.quotedMessage.sender?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=visitor',
-                level: record.messageWrapper.message.quotedMessage.sender?.level || 1,
-                points: record.messageWrapper.message.quotedMessage.sender?.points || 0,
-                isAdmin: record.messageWrapper.message.quotedMessage.sender?.isAdmin || false
-              },
-              timestamp: new Date(record.messageWrapper.message.quotedMessage.timestamp || Date.now())
-            } : undefined,
-            region: userIpInfo?.region || '未知地区'
+            quotedMessage: record.messageWrapper?.message?.quotedMessage
+              ? {
+                  id: String(record.messageWrapper.message.quotedMessage.id),
+                  content: record.messageWrapper.message.quotedMessage.content || '',
+                  sender: {
+                    id: String(record.messageWrapper.message.quotedMessage.sender?.id),
+                    name: record.messageWrapper.message.quotedMessage.sender?.name || '未知用户',
+                    avatar:
+                      record.messageWrapper.message.quotedMessage.sender?.avatar ||
+                      'https://api.dicebear.com/7.x/avataaars/svg?seed=visitor',
+                    level: record.messageWrapper.message.quotedMessage.sender?.level || 1,
+                    points: record.messageWrapper.message.quotedMessage.sender?.points || 0,
+                    isAdmin: record.messageWrapper.message.quotedMessage.sender?.isAdmin || false,
+                  },
+                  timestamp: new Date(
+                    record.messageWrapper.message.quotedMessage.timestamp || Date.now(),
+                  ),
+                }
+              : undefined,
+            region: userIpInfo?.region || '未知地区',
           }))
-          .filter(msg => !loadedMessageIds.has(msg.id));
+          .filter((msg) => !loadedMessageIds.has(msg.id));
 
         // 将新消息的ID添加到已加载集合中
-        historyMessages.forEach(msg => loadedMessageIds.add(msg.id));
+        historyMessages.forEach((msg) => loadedMessageIds.add(msg.id));
 
         // 处理历史消息，确保正确的时间顺序（旧消息在上，新消息在下）
         if (isFirstLoad) {
@@ -272,7 +294,7 @@ const ChatRoom: React.FC = () => {
           // 加载更多历史消息时，新的历史消息应该在当前消息的上面
           // 只有在有新消息时才更新状态
           if (historyMessages.length > 0) {
-            setMessages(prev => [...historyMessages.reverse(), ...prev]);
+            setMessages((prev) => [...historyMessages.reverse(), ...prev]);
           }
         }
 
@@ -305,7 +327,7 @@ const ChatRoom: React.FC = () => {
 
   // 检查是否在底部
   const checkIfNearBottom = () => {
-    const container = messageContainerRef.current;
+    const container = listRef.current;
     if (!container) return;
 
     // 只有完全在底部时才返回true
@@ -314,15 +336,17 @@ const ChatRoom: React.FC = () => {
   };
 
   // 监听滚动事件
-  const handleScroll = () => {
-    const container = messageContainerRef.current;
+  const handleScroll = ({ scrollOffset }: { scrollOffset: number }) => {
+    console.log('listRef', listRef);
+    const container = listRef.current;
     if (!container || loading || !hasMore) return;
 
     // 检查是否在底部
     checkIfNearBottom();
-
+    console.log('滚动', scrollOffset);
     // 当滚动到顶部时加载更多
-    if (container.scrollTop === 0) {
+    if (scrollOffset === 0) {
+      console.log('滚动到顶部');
       // 更新当前页码，加载下一页
       const nextPage = current + 1;
       if (hasMore) {
@@ -337,20 +361,20 @@ const ChatRoom: React.FC = () => {
   }, []);
 
   // 添加滚动监听
-  useEffect(() => {
-    const container = messageContainerRef.current;
-    if (container) {
-      container.addEventListener('scroll', handleScroll);
-      return () => container.removeEventListener('scroll', handleScroll);
-    }
-  }, [loading, hasMore, current]);
+  // useEffect(() => {
+  //   const container = messageContainerRef.current;
+  //   if (container) {
+  //     container.addEventListener('scroll', handleScroll);
+  //     return () => container.removeEventListener('scroll', handleScroll);
+  //   }
+  // }, [loading, hasMore, current]);
 
   // 处理图片上传
   const handleImageUpload = async (file: File) => {
     try {
       setUploading(true);
       const res = await getCosCredentialUsingGet({
-        fileName: file.name || `paste_${Date.now()}.png`
+        fileName: file.name || `paste_${Date.now()}.png`,
       });
       // console.log('getKeyAndCredentials:', res);
       const data = res.data;
@@ -364,29 +388,31 @@ const ChatRoom: React.FC = () => {
 
       // 使用 Promise 包装 COS 上传
       const url = await new Promise<string>((resolve, reject) => {
-        cos.uploadFile({
-          Bucket: data?.bucket as string,
-          Region: data?.region as string,
-          Key: data?.key as string,
-          Body: file,
-          onProgress: function (progressData) {
-            // console.log('上传进度：', progressData);
-          }
-        }, function (err, data) {
-          if (err) {
-            reject(err);
-            return;
-          }
-          // console.log('上传结束', data);
-          const url = "https://" + data.Location;
-          // console.log("图片地址：", url);
-          resolve(url);
-        });
+        cos.uploadFile(
+          {
+            Bucket: data?.bucket as string,
+            Region: data?.region as string,
+            Key: data?.key as string,
+            Body: file,
+            onProgress: function (progressData) {
+              // console.log('上传进度：', progressData);
+            },
+          },
+          function (err, data) {
+            if (err) {
+              reject(err);
+              return;
+            }
+            // console.log('上传结束', data);
+            const url = 'https://' + data.Location;
+            // console.log("图片地址：", url);
+            resolve(url);
+          },
+        );
       });
 
       // 设置预览图片
       setPendingImageUrl(url);
-
     } catch (error) {
       messageApi.error(`上传失败：${error}`);
     } finally {
@@ -421,14 +447,15 @@ const ChatRoom: React.FC = () => {
 
       // 调用后端上传接口
       const res = await uploadFileByMinioUsingPost(
-        { biz: 'user_file' },  // 业务标识参数
-        {},               // body 参数
-        file,            // 文件参数
-        {                // 其他选项
+        { biz: 'user_file' }, // 业务标识参数
+        {}, // body 参数
+        file, // 文件参数
+        {
+          // 其他选项
           headers: {
             'Content-Type': 'multipart/form-data',
           },
-        }
+        },
       );
 
       if (!res.data) {
@@ -523,7 +550,7 @@ const ChatRoom: React.FC = () => {
     let match;
     while ((match = mentionRegex.exec(content)) !== null) {
       const mentionedName = match[1];
-      const mentionedUser = onlineUsers.find(user => user.name === mentionedName);
+      const mentionedUser = onlineUsers.find((user) => user.name === mentionedName);
       if (mentionedUser) {
         mentionedUsers.push(mentionedUser);
       }
@@ -539,12 +566,12 @@ const ChatRoom: React.FC = () => {
         level: currentUser.level || 1,
         points: currentUser.points || 0,
         isAdmin: currentUser.userRole === 'admin',
-        region: userIpInfo?.region || '未知地区'
+        region: userIpInfo?.region || '未知地区',
       },
       timestamp: new Date(),
       quotedMessage: quotedMessage || undefined,
       mentionedUsers: mentionedUsers.length > 0 ? mentionedUsers : undefined,
-      region: userIpInfo?.region || '未知地区'
+      region: userIpInfo?.region || '未知地区',
     };
 
     // 发送消息到服务器
@@ -554,15 +581,15 @@ const ChatRoom: React.FC = () => {
       data: {
         type: 'chat',
         content: {
-          message: newMessage
-        }
-      }
+          message: newMessage,
+        },
+      },
     };
     ws.send(JSON.stringify(messageData));
 
     // 更新消息列表
-    setMessages(prev => [...prev, newMessage]);
-    setTotal(prev => prev + 1);
+    setMessages((prev) => [...prev, newMessage]);
+    setTotal((prev) => prev + 1);
     setHasMore(true);
 
     // 清空输入框、预览图片、文件和引用消息
@@ -584,7 +611,7 @@ const ChatRoom: React.FC = () => {
   const scrollToMessage = (messageId: string) => {
     const messageElement = document.getElementById(`message-${messageId}`);
     if (messageElement) {
-      messageElement.scrollIntoView({behavior: 'smooth', block: 'center'});
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
       // 添加高亮效果
       messageElement.classList.add(styles.highlighted);
       setTimeout(() => {
@@ -595,7 +622,7 @@ const ChatRoom: React.FC = () => {
 
   // 添加处理@消息的函数
   const handleMentionNotification = (message: Message) => {
-    if (message.mentionedUsers?.some(user => user.id === String(currentUser?.id))) {
+    if (message.mentionedUsers?.some((user) => user.id === String(currentUser?.id))) {
       messageApi.info({
         content: (
           <div onClick={() => scrollToMessage(message.id)}>
@@ -605,7 +632,7 @@ const ChatRoom: React.FC = () => {
         duration: 5,
         key: message.id,
       });
-      setNotifications(prev => [...prev, message]);
+      setNotifications((prev) => [...prev, message]);
     }
   };
 
@@ -625,9 +652,11 @@ const ChatRoom: React.FC = () => {
     const socket = new WebSocket(BACKEND_HOST_WS + token);
 
     socket.onopen = () => {
-      socket.send(JSON.stringify({
-        type: 1, // 登录连接
-      }));
+      socket.send(
+        JSON.stringify({
+          type: 1, // 登录连接
+        }),
+      );
       // console.log('WebSocket连接成功');
       setReconnectAttempts(0); // 重置重连次数
     };
@@ -637,10 +666,14 @@ const ChatRoom: React.FC = () => {
       setWs(null);
 
       // 只有在组件仍然挂载且非主动关闭的情况下才尝试重连
-      if (isComponentMounted && !isManuallyClosedRef.current && reconnectAttempts < maxReconnectAttempts) {
+      if (
+        isComponentMounted &&
+        !isManuallyClosedRef.current &&
+        reconnectAttempts < maxReconnectAttempts
+      ) {
         const timeout = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
         reconnectTimeoutRef.current = setTimeout(() => {
-          setReconnectAttempts(prev => prev + 1);
+          setReconnectAttempts((prev) => prev + 1);
           connectWebSocket();
         }, timeout);
       }
@@ -653,8 +686,8 @@ const ChatRoom: React.FC = () => {
         // console.log('处理聊天消息:', data.data.message);
         const otherUserMessage = data.data.message;
         if (otherUserMessage.sender.id !== String(currentUser?.id)) {
-          setMessages(prev => {
-            const newMessages = [...prev, {...otherUserMessage}];
+          setMessages((prev) => {
+            const newMessages = [...prev, { ...otherUserMessage }];
             // 检查是否有@当前用户
             handleMentionNotification(otherUserMessage);
             return newMessages;
@@ -664,7 +697,8 @@ const ChatRoom: React.FC = () => {
           const container = messageContainerRef.current;
           if (container) {
             const threshold = 30; // 30px的阈值，在底部附近就会自动滚动
-            const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            const distanceFromBottom =
+              container.scrollHeight - container.scrollTop - container.clientHeight;
             // 当距离底部很近时才自动滚动
             if (distanceFromBottom <= threshold) {
               setTimeout(scrollToBottom, 100);
@@ -674,20 +708,21 @@ const ChatRoom: React.FC = () => {
       } else if (data.type === 'userMessageRevoke') {
         // console.log('处理消息撤回:', data.data);
         // 从消息列表中移除被撤回的消息
-        setMessages(prev => prev.filter(msg => msg.id !== data.data));
+        setMessages((prev) => prev.filter((msg) => msg.id !== data.data));
         // 更新总消息数
-        setTotal(prev => Math.max(0, prev - 1));
+        setTotal((prev) => Math.max(0, prev - 1));
       } else if (data.type === 'userOnline') {
         // console.log('处理用户上线消息:', data.data);
-        setOnlineUsers(prev => [
+        setOnlineUsers((prev) => [
           ...prev,
-          ...data.data.filter((newUser: { id: string; }) => !prev.some(user => user.id === newUser.id))
+          ...data.data.filter(
+            (newUser: { id: string }) => !prev.some((user) => user.id === newUser.id),
+          ),
         ]);
-
       } else if (data.type === 'userOffline') {
         // console.log('处理用户下线消息:', data.data);
         // 过滤掉下线的用户
-        setOnlineUsers(prev => prev.filter(user => user.id !== data.data));
+        setOnlineUsers((prev) => prev.filter((user) => user.id !== data.data));
       }
     };
 
@@ -699,9 +734,11 @@ const ChatRoom: React.FC = () => {
     // 定期发送心跳消息
     const pingInterval = setInterval(() => {
       if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({
-          type: 4, // 心跳消息类型
-        }));
+        socket.send(
+          JSON.stringify({
+            type: 4, // 心跳消息类型
+          }),
+        );
       }
     }, 25000);
 
@@ -726,7 +763,7 @@ const ChatRoom: React.FC = () => {
 
       return () => {
         setIsComponentMounted(false);
-        isManuallyClosedRef.current = true;  // 标记为手动关闭
+        isManuallyClosedRef.current = true; // 标记为手动关闭
         if (cleanup) cleanup();
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
@@ -741,7 +778,7 @@ const ChatRoom: React.FC = () => {
   const getLevelEmoji = (level: number) => {
     switch (level) {
       case 7:
-        return '👑';  // 最高级
+        return '👑'; // 最高级
       case 6:
         return '🛏';
       case 5:
@@ -755,7 +792,7 @@ const ChatRoom: React.FC = () => {
       case 1:
         return '💦';
       default:
-        return '💦';  // 默认显示
+        return '💦'; // 默认显示
     }
   };
 
@@ -814,17 +851,21 @@ const ChatRoom: React.FC = () => {
         tagClass = styles.levelTagNewbie;
     }
 
+    tagText = '摸鱼皇帝';
+    tagEmoji = '👑';
+    tagClass = styles.levelTagMaster;
+
     return (
       <span className={`${styles.adminTag} ${tagClass}`}>
-          {tagEmoji}
+        {tagEmoji}
         <span className={styles.adminText}>{tagText}</span>
-        </span>
+      </span>
     );
     // }
   };
 
   const handleEmojiClick = (emoji: any) => {
-    setInputValue(prev => prev + emoji.native);
+    setInputValue((prev) => prev + emoji.native);
     setIsEmojiPickerVisible(false);
   };
 
@@ -870,9 +911,9 @@ const ChatRoom: React.FC = () => {
     };
 
     // 新发送的消息添加到列表末尾
-    setMessages(prev => [...prev, newMessage]);
+    setMessages((prev) => [...prev, newMessage]);
     // 更新总消息数和分页状态
-    setTotal(prev => prev + 1);
+    setTotal((prev) => prev + 1);
     setHasMore(true);
 
     // 发送消息到服务器
@@ -882,9 +923,9 @@ const ChatRoom: React.FC = () => {
       data: {
         type: 'chat',
         content: {
-          message: newMessage
-        }
-      }
+          message: newMessage,
+        },
+      },
     };
     ws.send(JSON.stringify(messageData));
 
@@ -906,8 +947,8 @@ const ChatRoom: React.FC = () => {
       userId: -1,
       data: {
         type: 'userMessageRevoke',
-        content: messageId
-      }
+        content: messageId,
+      },
     };
 
     ws.send(JSON.stringify(messageData));
@@ -918,7 +959,7 @@ const ChatRoom: React.FC = () => {
   // 添加@用户的处理函数
   const handleMentionUser = (user: User) => {
     const mentionText = `@${user.name} `;
-    setInputValue(prev => {
+    setInputValue((prev) => {
       // 如果当前输入框已经有这个@，就不重复添加
       if (prev.includes(mentionText)) {
         return prev;
@@ -927,7 +968,7 @@ const ChatRoom: React.FC = () => {
     });
   };
 
-  const UserInfoCard: React.FC<{ user: User }> = ({user}) => {
+  const UserInfoCard: React.FC<{ user: User }> = ({ user }) => {
     return (
       <div className={styles.userInfoCard}>
         <div className={styles.userInfoCardHeader}>
@@ -938,7 +979,7 @@ const ChatRoom: React.FC = () => {
               handleMentionUser(user);
             }}
           >
-            <Avatar src={user.avatar} size={48}/>
+            <Avatar src={user.avatar} size={48} />
             <div className={styles.floatingFish}>🐟</div>
           </div>
           <div className={styles.userInfoCardTitle}>
@@ -973,6 +1014,100 @@ const ChatRoom: React.FC = () => {
     setQuotedMessage(message);
   };
 
+  const messageHeights = useRef<any>({}); // 记录每条消息的高度
+
+  // 动态获取消息高度
+  const getItemSize = useCallback(
+    (index: number): number => {
+      return messageHeights.current[messages[index].id] || 80; // 默认 80px
+    },
+    [messages],
+  );
+
+  // 监听消息内容变化，调整高度
+  const setMessageHeight = (id: string, height: number): void => {
+    if (messageHeights.current[id] !== height) {
+      messageHeights.current[id] = height;
+      listRef.current?.resetAfterIndex(0); // 重新计算高度
+    }
+  };
+
+  const Row = ({ index, style }: { index: number; style: React.CSSProperties }) => {
+    const msg = messages[index];
+    console.log(
+      'currentUser?.id && String(msg.sender.id) === String(currentUser.id)',
+      currentUser?.id,
+      msg.sender.id,
+      String(msg.sender.id) === String(currentUser.id),
+    );
+    return (
+      <div
+        key={msg.id}
+        id={`message-${msg.id}`}
+        style={{ ...style, height: 'auto', overflow: 'hidden' }}
+        ref={(el) => {
+          if (el) setMessageHeight(msg.id, el.getBoundingClientRect().height);
+        }}
+        className={`${styles.messageItem} ${
+          currentUser?.id && String(msg.sender.id) === String(currentUser.id) ? styles.self : ''
+        } ${notifications.some((n) => n.id === msg.id) ? styles.mentioned : ''}`}
+      >
+        <div className={styles.messageHeader}>
+          <div
+            className={styles.avatar}
+            onClick={() => handleMentionUser(msg.sender)}
+            style={{ cursor: 'pointer' }}
+          >
+            <Popover content={<UserInfoCard user={msg.sender} />} trigger="hover" placement="top">
+              <Avatar src={msg.sender.avatar} size={32} />
+            </Popover>
+          </div>
+          <div className={styles.senderInfo}>
+            <span className={styles.senderName}>
+              {msg.sender.name}
+              {getAdminTag(msg.sender.isAdmin, msg.sender.level)}
+              <span className={styles.levelBadge}>
+                {getLevelEmoji(msg.sender.level)} {msg.sender.level}
+              </span>
+            </span>
+          </div>
+        </div>
+        <div className={styles.messageContent}>
+          {msg.quotedMessage && (
+            <div className={styles.quotedMessage}>
+              <div className={styles.quotedMessageHeader}>
+                <span className={styles.quotedMessageSender}>{msg.quotedMessage.sender.name}</span>
+                <span className={styles.quotedMessageTime}>
+                  {new Date(msg.quotedMessage.timestamp).toLocaleTimeString()}
+                </span>
+              </div>
+              <div className={styles.quotedMessageContent}>
+                <MessageContent content={msg.quotedMessage.content} />
+              </div>
+            </div>
+          )}
+          <MessageContent content={msg.content} />
+        </div>
+        <div className={styles.messageFooter}>
+          <span className={styles.timestamp}>{new Date(msg.timestamp).toLocaleTimeString()}</span>
+          {currentUser?.id && String(msg.sender.id) === String(currentUser.id) ? (
+            <Popconfirm
+              title="确定要撤回这条消息吗？"
+              onConfirm={() => handleRevokeMessage(msg.id)}
+              okText="确定"
+              cancelText="取消"
+            >
+              <span className={styles.revokeText}>撤回</span>
+            </Popconfirm>
+          ) : (
+            <span className={styles.quoteText} onClick={() => handleQuoteMessage(msg)}>
+              引用
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className={`${styles.chatRoom} ${isUserListCollapsed ? styles.collapsed : ''}`}>
@@ -981,7 +1116,7 @@ const ChatRoom: React.FC = () => {
         <Alert
           message={
             <div className={styles.announcementContent}>
-              <SoundOutlined className={styles.announcementIcon}/>
+              <SoundOutlined className={styles.announcementIcon} />
               <span>{announcement}</span>
             </div>
           }
@@ -997,13 +1132,13 @@ const ChatRoom: React.FC = () => {
       <div className={styles['floating-fish'] + ' ' + styles.fish3}>🐡</div>
       <div className={styles['floating-fish'] + ' ' + styles.bubble1}>💭</div>
       <div className={styles['floating-fish'] + ' ' + styles.bubble2}>💭</div>
-      <div
-        className={styles.messageContainer}
-        ref={messageContainerRef}
-        onScroll={handleScroll}
-      >
-        {loading && <div className={styles.loadingWrapper}><Spin/></div>}
-        {messages.map((msg) => (
+      <div className={styles.messageContainer} ref={messageContainerRef}>
+        {loading && (
+          <div className={styles.loadingWrapper}>
+            <Spin />
+          </div>
+        )}
+        {/* {messages.map((msg) => (
           <div
             key={msg.id}
             id={`message-${msg.id}`}
@@ -1074,8 +1209,19 @@ const ChatRoom: React.FC = () => {
               )}
             </div>
           </div>
-        ))}
-        <div ref={messagesEndRef}/>
+        ))} */}
+        <VariableSizeList
+          ref={listRef}
+          height={messageContainerRef.current?.offsetHeight || 0}
+          itemCount={messages.length}
+          itemSize={getItemSize} // 动态高度
+          width="100%"
+          overscanCount={5} // 预加载 5 条消息，提高滚动流畅度
+          onScroll={handleScroll}
+        >
+          {Row}
+        </VariableSizeList>
+        <div ref={messagesEndRef} />
       </div>
 
       <div className={styles.userList}>
@@ -1083,36 +1229,26 @@ const ChatRoom: React.FC = () => {
           className={styles.collapseButton}
           onClick={() => setIsUserListCollapsed(!isUserListCollapsed)}
         >
-          {isUserListCollapsed ? <MenuUnfoldOutlined/> : <MenuFoldOutlined/>}
+          {isUserListCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
         </div>
-        <div className={styles.userListHeader}>
-          在线成员 ({onlineUsers.length})
-        </div>
-        {onlineUsers.map(user => (
+        <div className={styles.userListHeader}>在线成员 ({onlineUsers.length})</div>
+        {onlineUsers.map((user) => (
           <div
             key={user.id}
             className={styles.userItem}
             onClick={() => handleMentionUser(user)}
-            style={{cursor: 'pointer'}}
+            style={{ cursor: 'pointer' }}
           >
             <div className={styles.avatarWrapper}>
-              <Popover
-                content={<UserInfoCard user={user}/>}
-                trigger="hover"
-                placement="right"
-              >
-                <Avatar src={user.avatar} size={28}/>
+              <Popover content={<UserInfoCard user={user} />} trigger="hover" placement="right">
+                <Avatar src={user.avatar} size={28} />
               </Popover>
             </div>
             <div className={styles.userInfo}>
-              <div className={styles.userName}>
-                {user.name}
-              </div>
+              <div className={styles.userName}>{user.name}</div>
               <div className={styles.userStatus}>{user.status}</div>
             </div>
-            <span className={styles.levelBadge}>
-              {getLevelEmoji(user.level)}
-            </span>
+            <span className={styles.levelBadge}>{getLevelEmoji(user.level)}</span>
           </div>
         ))}
       </div>
@@ -1123,12 +1259,12 @@ const ChatRoom: React.FC = () => {
             <div className={styles.quotePreviewContent}>
               <span className={styles.quotePreviewSender}>{quotedMessage.sender.name}:</span>
               <span className={styles.quotePreviewText}>
-                <MessageContent content={quotedMessage.content}/>
+                <MessageContent content={quotedMessage.content} />
               </span>
             </div>
             <Button
               type="text"
-              icon={<DeleteOutlined/>}
+              icon={<DeleteOutlined />}
               className={styles.removeQuote}
               onClick={handleCancelQuote}
             />
@@ -1148,7 +1284,7 @@ const ChatRoom: React.FC = () => {
               />
               <Button
                 type="text"
-                icon={<DeleteOutlined/>}
+                icon={<DeleteOutlined />}
                 className={styles.removeImage}
                 onClick={handleRemoveImage}
               />
@@ -1159,14 +1295,12 @@ const ChatRoom: React.FC = () => {
           <div className={styles.filePreview}>
             <div className={styles.previewWrapper}>
               <div className={styles.fileInfo}>
-                <PaperClipOutlined className={styles.fileIcon}/>
-                <span className={styles.fileName}>
-                  {pendingFileUrl.split('/').pop()}
-                </span>
+                <PaperClipOutlined className={styles.fileIcon} />
+                <span className={styles.fileName}>{pendingFileUrl.split('/').pop()}</span>
               </div>
               <Button
                 type="text"
-                icon={<DeleteOutlined/>}
+                icon={<DeleteOutlined />}
                 className={styles.removeFile}
                 onClick={handleRemoveFile}
               />
@@ -1177,7 +1311,7 @@ const ChatRoom: React.FC = () => {
           <input
             type="file"
             ref={fileInputRef}
-            style={{display: 'none'}}
+            style={{ display: 'none' }}
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) {
@@ -1187,7 +1321,7 @@ const ChatRoom: React.FC = () => {
             disabled={uploadingFile}
           />
           <Button
-            icon={<PaperClipOutlined/>}
+            icon={<PaperClipOutlined />}
             className={styles.fileButton}
             onClick={() => fileInputRef.current?.click()}
             disabled={uploadingFile}
@@ -1200,23 +1334,17 @@ const ChatRoom: React.FC = () => {
             placement="topLeft"
             overlayClassName={styles.emojiPopover}
           >
-            <Button
-              icon={<SmileOutlined/>}
-              className={styles.emojiButton}
-            />
+            <Button icon={<SmileOutlined />} className={styles.emojiButton} />
           </Popover>
           <Popover
-            content={<EmoticonPicker onSelect={handleEmoticonSelect}/>}
+            content={<EmoticonPicker onSelect={handleEmoticonSelect} />}
             trigger="click"
             visible={isEmoticonPickerVisible}
             onVisibleChange={setIsEmoticonPickerVisible}
             placement="topLeft"
             overlayClassName={styles.emoticonPopover}
           >
-            <Button
-              icon={<PictureOutlined/>}
-              className={styles.emoticonButton}
-            />
+            <Button icon={<PictureOutlined />} className={styles.emoticonButton} />
           </Popover>
           <Input
             value={inputValue}
@@ -1229,16 +1357,14 @@ const ChatRoom: React.FC = () => {
               handleSend();
             }}
             onPaste={handlePaste}
-            placeholder={uploading ? "正在上传图片..." : "输入消息或粘贴图片..."}
+            placeholder={uploading ? '正在上传图片...' : '输入消息或粘贴图片...'}
             maxLength={200}
             disabled={uploading}
           />
-          <span className={styles.inputCounter}>
-            {inputValue.length}/200
-          </span>
+          <span className={styles.inputCounter}>{inputValue.length}/200</span>
           <Button
             type="text"
-            icon={<SendOutlined/>}
+            icon={<SendOutlined />}
             onClick={() => handleSend()}
             disabled={uploading}
           >
@@ -1247,16 +1373,11 @@ const ChatRoom: React.FC = () => {
         </div>
       </div>
 
-      <Modal
-        visible={isPreviewVisible}
-        footer={null}
-        onCancel={() => setIsPreviewVisible(false)}
-      >
-        {previewImage && <img alt="预览" style={{width: '100%'}} src={previewImage}/>}
+      <Modal visible={isPreviewVisible} footer={null} onCancel={() => setIsPreviewVisible(false)}>
+        {previewImage && <img alt="预览" style={{ width: '100%' }} src={previewImage} />}
       </Modal>
     </div>
   );
 };
 
 export default ChatRoom;
-

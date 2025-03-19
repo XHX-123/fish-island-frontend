@@ -44,6 +44,7 @@
     "@ant-design/charts": "^2.0.3",
     "@ant-design/icons": "^4.8.0",
     "@ant-design/pro-components": "^2.3.57",
+    "@ant-design/pro-form": "^2.31.6",
     "@ant-design/use-emotion-css": "1.0.4",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
@@ -73,6 +74,7 @@
     "react-infinite-scroll-component": "^6.1.0",
     "react-json-view": "^1.21.3",
     "react-syntax-highlighter": "^15.6.1",
+    "react-window": "^1.8.11",
     "serve": "^14.2.1",
     "yaml": "^2.7.0"
   },
